@@ -1,0 +1,5 @@
+{
+  "name": "OptiExtract - Smart Image Auditor",
+  "description": "A developer tool that parses HTML code to extract image references and uses Gemini AI to suggest dimension optimizations, responsiveness strategies, and accessibility improvements based on context.",
+  "requestFramePermissions": []
+}
