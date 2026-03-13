@@ -47,7 +47,7 @@ app.post("/api/analyze", limiter, async (req, res) => {
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-2.5-flash',
       contents: JSON.stringify(images),
       config: {
         systemInstruction: systemInstruction,
