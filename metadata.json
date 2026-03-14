@@ -1,5 +1,5 @@
 {
-  "name": "OptiExtract - Smart Image Auditor",
-  "description": "A developer tool that parses HTML code to extract image references and uses Gemini AI to suggest dimension optimizations, responsiveness strategies, and accessibility improvements based on context.",
+  "name": "OptiExtract AI: The Ultimate Image SEO & Performance Auditor",
+  "description": "PROBLEM: Unoptimized images are the #1 cause of slow websites and poor SEO. Manually auditing <img> tags is a tedious bottleneck. SOLUTION: OptiExtract AI automates the audit. FEATURES: Gemini AI-powered context analysis, automated responsive strategies (srcset/sizes), and one-click PDF/Excel reporting. BENEFIT: Boost Core Web Vitals and save hours of manual work with production-ready optimization reports.",
   "requestFramePermissions": []
 }
