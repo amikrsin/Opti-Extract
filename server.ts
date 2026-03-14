@@ -9,6 +9,7 @@ import path from "path";
 import axios from "axios";
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = 3000;
 
 // Proxy endpoint to fetch HTML content
@@ -72,7 +73,7 @@ app.post("/api/analyze", limiter, async (req, res) => {
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-flash-preview',
       contents: JSON.stringify(images),
       config: {
         systemInstruction: systemInstruction,

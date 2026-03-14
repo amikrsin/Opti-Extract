@@ -1,8 +1,11 @@
 import React, { useState, useCallback } from 'react';
-import { Code, Search, Sparkles, AlertTriangle, RefreshCw, FileCode, Globe, ArrowRight, Link as LinkIcon } from 'lucide-react';
+import { Code, Search, Sparkles, AlertTriangle, RefreshCw, FileCode, Globe, ArrowRight, Link as LinkIcon, Download, FileText, Table } from 'lucide-react';
 import { ScannedImage, OptimizationSuggestion, AnalysisStatus } from './types';
 import { analyzeImagesWithGemini } from './services/geminiService';
 import { ImageCard } from './components/ImageCard';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 
 const SAMPLE_HTML = `
 <div class="hero-section">
@@ -69,7 +72,7 @@ export default function App() {
       // but let's let the user see the code first or click analyze.
       // For better UX, we can just stop here and let them click "Analyze".
     } catch (err) {
-      setErrorMsg("Could not fetch website. The site might block proxies or have security restrictions.");
+      setErrorMsg("Could not fetch website. Some very large sites like Myntra use extremely high security (like Cloudflare) that blocks almost all automated fetching, even from servers. If this specifically shows an error, try a different site to confirm the tool is working!");
       console.error(err);
     } finally {
       setIsFetchingUrl(false);
@@ -141,6 +144,70 @@ export default function App() {
   const loadSample = () => {
     setHtmlInput(SAMPLE_HTML);
     setBaseUrl('');
+  };
+
+  const downloadPDF = () => {
+    const doc = new jsPDF();
+    doc.setFontSize(20);
+    doc.text('Image Optimization Audit Report', 14, 22);
+    doc.setFontSize(11);
+    doc.setTextColor(100);
+    doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 30);
+    if (baseUrl) {
+      doc.text(`Source URL: ${baseUrl}`, 14, 36);
+    }
+
+    const tableData = images.map(img => {
+      const sug = suggestions.get(img.id);
+      return [
+        img.src.substring(0, 50) + (img.src.length > 50 ? '...' : ''),
+        sug?.role || 'N/A',
+        sug?.suggestedFormats.join(', ') || 'N/A',
+        sug?.suggestedWidths.join(', ') || 'N/A',
+        sug?.lazyLoad ? 'Yes' : 'No',
+        sug?.altTextImprovement || 'N/A'
+      ];
+    });
+
+    autoTable(doc, {
+      startY: 45,
+      head: [['Image Source', 'Role', 'Formats', 'Widths', 'Lazy', 'Alt Improvement']],
+      body: tableData,
+      theme: 'grid',
+      headStyles: { fillColor: [79, 70, 229] },
+      styles: { fontSize: 8 },
+      columnStyles: {
+        0: { cellWidth: 40 },
+        5: { cellWidth: 40 }
+      }
+    });
+
+    doc.save('image-optimization-report.pdf');
+  };
+
+  const downloadExcel = () => {
+    const data = images.map(img => {
+      const sug = suggestions.get(img.id);
+      return {
+        'Image ID': img.id,
+        'Source URL': img.src,
+        'Original Width': img.originalWidth || 'N/A',
+        'Original Height': img.originalHeight || 'N/A',
+        'Current Alt': img.alt || 'N/A',
+        'Role': sug?.role || 'N/A',
+        'Suggested Formats': sug?.suggestedFormats.join(', ') || 'N/A',
+        'Suggested Widths': sug?.suggestedWidths.join(', ') || 'N/A',
+        'Sizes Attribute': sug?.sizesAttribute || 'N/A',
+        'Lazy Load': sug?.lazyLoad ? 'Yes' : 'No',
+        'Alt Improvement': sug?.altTextImprovement || 'N/A',
+        'Reasoning': sug?.reasoning || 'N/A'
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Optimization Report');
+    XLSX.writeFile(workbook, 'image-optimization-report.xlsx');
   };
 
   return (
@@ -244,20 +311,41 @@ export default function App() {
         <div className="p-8 max-w-5xl mx-auto min-h-full">
           
           {/* Header State */}
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-              Analysis Results
-              {images.length > 0 && (
-                <span className="px-2 py-0.5 rounded-full bg-slate-800 text-xs text-slate-400 border border-slate-700">
-                  {images.length} images found
-                </span>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
+            <div className="flex items-center gap-3">
+              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                Analysis Results
+                {images.length > 0 && (
+                  <span className="px-2 py-0.5 rounded-full bg-slate-800 text-xs text-slate-400 border border-slate-700">
+                    {images.length} images found
+                  </span>
+                )}
+              </h2>
+              {status === AnalysisStatus.ANALYZING_AI && (
+                 <div className="flex items-center gap-2 text-xs text-indigo-400 animate-pulse">
+                   <Sparkles size={14} />
+                   Generating responsive strategies...
+                 </div>
               )}
-            </h2>
-            {status === AnalysisStatus.ANALYZING_AI && (
-               <div className="flex items-center gap-2 text-xs text-indigo-400 animate-pulse">
-                 <Sparkles size={14} />
-                 Generating responsive strategies...
-               </div>
+            </div>
+
+            {images.length > 0 && status === AnalysisStatus.COMPLETE && (
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={downloadPDF}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-lg border border-slate-700 transition-colors"
+                >
+                  <FileText size={14} />
+                  <span>PDF Report</span>
+                </button>
+                <button 
+                  onClick={downloadExcel}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-lg border border-slate-700 transition-colors"
+                >
+                  <Table size={14} />
+                  <span>Excel Report</span>
+                </button>
+              </div>
             )}
           </div>
 
