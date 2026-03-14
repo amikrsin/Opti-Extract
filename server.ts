@@ -6,8 +6,32 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 
+import axios from "axios";
+
 const app = express();
 const PORT = 3000;
+
+// Proxy endpoint to fetch HTML content
+app.get("/api/proxy", async (req, res) => {
+  const { url } = req.query;
+
+  if (!url || typeof url !== "string") {
+    return res.status(400).json({ error: "URL is required" });
+  }
+
+  try {
+    const response = await axios.get(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      },
+      timeout: 10000,
+    });
+    res.send(response.data);
+  } catch (error: any) {
+    console.error("Proxy error:", error.message);
+    res.status(500).json({ error: `Failed to fetch URL: ${error.message}` });
+  }
+});
 
 // Rate limiter: 2 requests per 24 hours per IP
 const limiter = rateLimit({

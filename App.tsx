@@ -54,12 +54,13 @@ export default function App() {
     setBaseUrl(targetUrl); // Set base URL for relative path resolution
 
     try {
-      // Using allorigins.win as a CORS proxy for client-side fetching
-      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
+      // Using local proxy for more reliable fetching
+      const proxyUrl = `/api/proxy?url=${encodeURIComponent(targetUrl)}`;
       const response = await fetch(proxyUrl);
       
       if (!response.ok) {
-        throw new Error(`Failed to fetch content: ${response.statusText}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Failed to fetch content: ${response.statusText}`);
       }
       
       const htmlText = await response.text();
