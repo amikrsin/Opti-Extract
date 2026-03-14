@@ -30,6 +30,8 @@ export default function App() {
   const [suggestions, setSuggestions] = useState<Map<string, OptimizationSuggestion>>(new Map());
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isFetchingUrl, setIsFetchingUrl] = useState(false);
+  const [filter, setFilter] = useState<'all' | 'critical' | 'warnings' | 'optimized'>('all');
+  const [sortBy, setSortBy] = useState<'none' | 'largest' | 'issues' | 'alt'>('none');
 
   const resolveImageSrc = (src: string | null, base: string): string => {
     if (!src) return '';
@@ -242,6 +244,53 @@ export default function App() {
 
   const metrics = getMetrics();
 
+  // Filter and Sort Logic
+  const filteredAndSortedImages = images.filter(img => {
+    const sug = suggestions.get(img.id);
+    if (filter === 'all') return true;
+    if (!sug) return filter === 'all';
+
+    const isMissingAlt = !img.alt && !!sug.altTextImprovement;
+    const isMissingLazy = !sug.lazyLoad && sug.role !== 'Hero';
+
+    if (filter === 'critical') return isMissingAlt;
+    if (filter === 'warnings') return isMissingLazy && !isMissingAlt;
+    if (filter === 'optimized') return !isMissingAlt && !isMissingLazy;
+    return true;
+  }).sort((a, b) => {
+    if (sortBy === 'none') return 0;
+
+    const sugA = suggestions.get(a.id);
+    const sugB = suggestions.get(b.id);
+
+    if (sortBy === 'largest') {
+      const areaA = (parseInt(a.originalWidth || '0') || 0) * (parseInt(a.originalHeight || '0') || 0);
+      const areaB = (parseInt(b.originalWidth || '0') || 0) * (parseInt(b.originalHeight || '0') || 0);
+      return areaB - areaA;
+    }
+
+    if (sortBy === 'issues') {
+      const getIssueCount = (img: ScannedImage, sug?: OptimizationSuggestion) => {
+        if (!sug) return 0;
+        let count = 0;
+        if (!img.alt && !!sug.altTextImprovement) count += 2; // Critical
+        if (!sug.lazyLoad && sug.role !== 'Hero') count += 1; // Warning
+        return count;
+      };
+      return getIssueCount(b, sugB) - getIssueCount(a, sugA);
+    }
+
+    if (sortBy === 'alt') {
+      const hasMissingAltA = !a.alt && !!sugA?.altTextImprovement;
+      const hasMissingAltB = !b.alt && !!sugB?.altTextImprovement;
+      if (hasMissingAltA && !hasMissingAltB) return -1;
+      if (!hasMissingAltA && hasMissingAltB) return 1;
+      return 0;
+    }
+
+    return 0;
+  });
+
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-[#0f172a] text-slate-200">
       
@@ -391,63 +440,110 @@ export default function App() {
 
           {/* Audit Summary Dashboard */}
           {status === AnalysisStatus.COMPLETE && images.length > 0 && (
-            <div className="mb-10 animate-in fade-in slide-in-from-top-4 duration-700">
-              <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-6 backdrop-blur-sm">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                    <Zap size={14} className="text-indigo-400" />
-                    Image Audit Summary
-                  </h3>
-                  <div className="h-px flex-1 bg-slate-800 mx-4"></div>
-                </div>
+            <>
+              <div className="mb-10 animate-in fade-in slide-in-from-top-4 duration-700">
+                <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-6 backdrop-blur-sm">
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                      <Zap size={14} className="text-indigo-400" />
+                      Image Audit Summary
+                    </h3>
+                    <div className="h-px flex-1 bg-slate-800 mx-4"></div>
+                  </div>
 
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                  <div className="bg-slate-800/50 border border-slate-700/50 p-4 rounded-xl">
-                    <p className="text-xs font-medium text-slate-500 mb-1">Images Scanned</p>
-                    <p className="text-2xl font-bold text-white">{metrics.total}</p>
-                  </div>
-                  <div className="bg-red-900/10 border border-red-900/20 p-4 rounded-xl">
-                    <p className="text-xs font-medium text-red-400/70 mb-1">Critical Issues</p>
-                    <p className="text-2xl font-bold text-red-400">{metrics.critical}</p>
-                  </div>
-                  <div className="bg-amber-900/10 border border-amber-900/20 p-4 rounded-xl">
-                    <p className="text-xs font-medium text-amber-400/70 mb-1">Warnings</p>
-                    <p className="text-2xl font-bold text-amber-400">{metrics.warnings}</p>
-                  </div>
-                  <div className="bg-emerald-900/10 border border-emerald-900/20 p-4 rounded-xl">
-                    <p className="text-xs font-medium text-emerald-400/70 mb-1">Optimized</p>
-                    <p className="text-2xl font-bold text-emerald-400">{metrics.optimized}</p>
-                  </div>
-                </div>
-
-                <div className="flex flex-col sm:flex-row items-center gap-6 p-4 bg-indigo-600/10 border border-indigo-500/20 rounded-xl">
-                  <div className="flex-1">
-                    <h4 className="text-sm font-semibold text-indigo-300 mb-1">Estimated Performance Gain</h4>
-                    <p className="text-xs text-slate-400">Based on AI-suggested responsive strategies and modern formats.</p>
-                  </div>
-                  <div className="flex items-center gap-8">
-                    <div className="flex items-center gap-2">
-                      <div className="p-2 bg-indigo-500/20 rounded-lg">
-                        <Zap size={16} className="text-indigo-400" />
-                      </div>
-                      <div>
-                        <p className="text-lg font-bold text-white">{metrics.mbSaved} MB</p>
-                        <p className="text-[10px] text-slate-500 uppercase font-bold">Data Saved</p>
-                      </div>
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                    <div className="bg-slate-800/50 border border-slate-700/50 p-4 rounded-xl">
+                      <p className="text-xs font-medium text-slate-500 mb-1">Images Scanned</p>
+                      <p className="text-2xl font-bold text-white">{metrics.total}</p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <div className="p-2 bg-indigo-500/20 rounded-lg">
-                        <Zap size={16} className="text-indigo-400" />
+                    <div className="bg-red-900/10 border border-red-900/20 p-4 rounded-xl">
+                      <p className="text-xs font-medium text-red-400/70 mb-1">Critical Issues</p>
+                      <p className="text-2xl font-bold text-red-400">{metrics.critical}</p>
+                    </div>
+                    <div className="bg-amber-900/10 border border-amber-900/20 p-4 rounded-xl">
+                      <p className="text-xs font-medium text-amber-400/70 mb-1">Warnings</p>
+                      <p className="text-2xl font-bold text-amber-400">{metrics.warnings}</p>
+                    </div>
+                    <div className="bg-emerald-900/10 border border-emerald-900/20 p-4 rounded-xl">
+                      <p className="text-xs font-medium text-emerald-400/70 mb-1">Optimized</p>
+                      <p className="text-2xl font-bold text-emerald-400">{metrics.optimized}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-center gap-6 p-4 bg-indigo-600/10 border border-indigo-500/20 rounded-xl">
+                    <div className="flex-1">
+                      <h4 className="text-sm font-semibold text-indigo-300 mb-1">Estimated Performance Gain</h4>
+                      <p className="text-xs text-slate-400">Based on AI-suggested responsive strategies and modern formats.</p>
+                    </div>
+                    <div className="flex items-center gap-8">
+                      <div className="flex items-center gap-2">
+                        <div className="p-2 bg-indigo-500/20 rounded-lg">
+                          <Zap size={16} className="text-indigo-400" />
+                        </div>
+                        <div>
+                          <p className="text-lg font-bold text-white">{metrics.mbSaved} MB</p>
+                          <p className="text-[10px] text-slate-500 uppercase font-bold">Data Saved</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-lg font-bold text-white">{metrics.speedGain}%</p>
-                        <p className="text-[10px] text-slate-500 uppercase font-bold">Faster Load</p>
+                      <div className="flex items-center gap-2">
+                        <div className="p-2 bg-indigo-500/20 rounded-lg">
+                          <Zap size={16} className="text-indigo-400" />
+                        </div>
+                        <div>
+                          <p className="text-lg font-bold text-white">{metrics.speedGain}%</p>
+                          <p className="text-[10px] text-slate-500 uppercase font-bold">Faster Load</p>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
+
+              {/* Filters & Sorting */}
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6 p-4 bg-slate-900/30 border border-slate-800 rounded-xl">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mr-2">Filter Results:</span>
+                  <button 
+                    onClick={() => setFilter('all')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${filter === 'all' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/20' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
+                  >
+                    All
+                  </button>
+                  <button 
+                    onClick={() => setFilter('critical')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${filter === 'critical' ? 'bg-red-600 text-white shadow-lg shadow-red-900/20' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
+                  >
+                    Critical ({metrics.critical})
+                  </button>
+                  <button 
+                    onClick={() => setFilter('warnings')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${filter === 'warnings' ? 'bg-amber-600 text-white shadow-lg shadow-amber-900/20' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
+                  >
+                    Warnings ({metrics.warnings})
+                  </button>
+                  <button 
+                    onClick={() => setFilter('optimized')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${filter === 'optimized' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/20' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
+                  >
+                    Optimized ({metrics.optimized})
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Sort by:</span>
+                  <select 
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as any)}
+                    className="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-indigo-500 transition-all"
+                  >
+                    <option value="none">Default</option>
+                    <option value="largest">Largest Images</option>
+                    <option value="issues">Most Issues</option>
+                    <option value="alt">Missing Alt Text</option>
+                  </select>
+                </div>
+              </div>
+            </>
           )}
 
           {/* Empty State */}
@@ -463,7 +559,12 @@ export default function App() {
 
           {/* List Results */}
           <div className="space-y-6 pb-20">
-            {images.map((img) => (
+            {filteredAndSortedImages.length === 0 && images.length > 0 && (
+              <div className="py-20 text-center border border-dashed border-slate-800 rounded-2xl">
+                <p className="text-slate-500">No images match the selected filter.</p>
+              </div>
+            )}
+            {filteredAndSortedImages.map((img) => (
               <ImageCard 
                 key={img.id} 
                 image={img} 
